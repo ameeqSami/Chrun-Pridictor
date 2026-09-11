@@ -53,4 +53,7 @@ class clean_cls(BaseEstimator, TransformerMixin):
         if self.feature_columns is not None:
             cleaned_X = cleaned_X.reindex(columns=self.feature_columns, fill_value=0)
         return cleaned_X
+
+    def get_feature_names_out(self, input_features=None):
+        return self.feature_columns
     
