@@ -1,5 +1,5 @@
 def trace_customer_path(pipeline_dt, X_filtered, customer_idx=0):
-    tree_model = pipeline_dt['model']
+    tree_model = pipeline_dt['pridict_thresh'].model
     node_indicator = tree_model.decision_path(X_filtered)
     leave_id = tree_model.apply(X_filtered)
     node_index = node_indicator.indices[node_indicator.indptr[customer_idx]:node_indicator.indptr[customer_idx + 1]]
