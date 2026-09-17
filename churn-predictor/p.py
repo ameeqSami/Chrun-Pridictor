@@ -98,21 +98,28 @@ filtered_features = pipeline_dt.named_steps['ctf'].transform(cleaned_features.re
     # print('prediction: ', y_pred_dt[i])
     # print('-'*20)
 model = pipeline_dt['pridict_thresh'].model
+
 tree_model = model.estimators_[0]
+
 node_indicator = tree_model.decision_path(X_filtered)
-print(node_indicator)
+
 leave_id= tree_model.apply(X_filtered)
-print(leave_id)
+
 node_index = node_indicator.getrow(0).indices
-print(node_index)
+
 model = pipeline_dt['pridict_thresh'].model
 
 tree = tree_model.tree_
-print(tree.children_left[node_index])
-print(tree.children_right[node_index])
-print(tree.feature[node_index])
-print(tree.threshold[node_index])
-print(tree.value[node_index])
+
+feature_names = list(pipeline_dt['ctf'].get_feature_names_out())
+for i in range(len(node_indicator.indices)):
+    print(feature_names[tree.feature[node_index[i]]])
+    print(tree.threshold[node_index[i]])
+    print(X_filtered.iloc[0,tree.feature[node_index[i]]])
+    print(tree.value[node_index[i]])
+    print('-'*20)
+# print(tree.threshold[node_index])
+# print(tree.value[node_index])
 # --- Handle both DecisionTree and RandomForest ---
 # if isinstance(model, RandomForestClassifier):
 #     # For RF: trace through one individual tree
