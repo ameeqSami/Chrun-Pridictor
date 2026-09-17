@@ -1,37 +1,58 @@
-def trace_customer_path(pipeline_dt, X_filtered, customer_idx=0):
-    tree_model = pipeline_dt['pridict_thresh'].model
-    node_indicator = tree_model.decision_path(X_filtered)
+def trace_customer_path(pipeline_dt, X_filtered, customer_idx=0, tree_index=0):
+    from sklearn.tree import DecisionTreeClassifier
+    from sklearn.ensemble import RandomForestClassifier
+
+    model = pipeline_dt['pridict_thresh'].model
+
+    # --- Handle both DecisionTree and RandomForest ---
+    if isinstance(model, RandomForestClassifier):
+        # For RF: trace through one individual tree
+        tree_model = model.estimators_[tree_index]
+        print(f"ℹ️  RandomForest detected — tracing through tree #{tree_index} of {len(model.estimators_)}")
+        print("=" * 40)
+        node_indicator = tree_model.decision_path(X_filtered)
+    else:
+        # Single DecisionTree: decision_path returns sparse matrix directly
+        tree_model = model
+        result = tree_model.decision_path(X_filtered)
+        # DT returns sparse matrix directly
+        node_indicator = result
+
     leave_id = tree_model.apply(X_filtered)
-    node_index = node_indicator.indices[node_indicator.indptr[customer_idx]:node_indicator.indptr[customer_idx + 1]]
+    node_index = node_indicator.indices[
+        node_indicator.indptr[customer_idx]:node_indicator.indptr[customer_idx + 1]
+    ]
 
     print(f"Customer's Decision Path (Node IDs): {node_index}")
     print(f"Final Leaf Node: {leave_id[customer_idx]}")
     print("=" * 40)
-    
+
     tree = tree_model.tree_
-    feature_names = pipeline_dt['ctf'].get_feature_names_out()
-    sample_customer = X_filtered.iloc[customer_idx] 
+    feature_names = list(pipeline_dt['ctf'].get_feature_names_out())
+    sample_customer = X_filtered.iloc[customer_idx]
 
     for node_id in node_index:
-        # Dynamically checks the churn count for the current node_id
-        if tree.value[node_id][0][1] <= 0.45:    
-            if tree.children_left[node_id] != tree.children_right[node_id]:
-                feat_idx = tree.feature[node_id]
-                thresh = tree.threshold[node_id]
-                feat_name = feature_names[feat_idx]
-                
-                # Get this specific customer's value for this feature
-                customer_value = sample_customer[feat_name]
-                
-                print(f"Node {node_id} (Split Node):")
-                print(f"  - Feature checked: '{feat_name}'")
-                print(f"  - Tree rule: <= {thresh:.4f}")
-                print(f"  - Customer's actual value: {customer_value} (Condition met: {thresh <= customer_value})")
-                print("-" * 40)
-            else:
-                print(f"Node {node_id} (Leaf Node - Final Destination):")
-                print(f"  - Class distribution (No Churn, Churn): {tree.value[node_id]}")
-                print("=" * 40)
+        if tree.children_left[node_id] != tree.children_right[node_id]:
+            # Split node
+            feat_idx = tree.feature[node_id]
+            thresh = tree.threshold[node_id]
+            feat_name = feature_names[feat_idx]
+            customer_value = sample_customer[feat_name]
+
+            print(f"Node {node_id} (Split Node):")
+            print(f"  - Feature checked: '{feat_name}'")
+            print(f"  - Tree rule: <= {thresh:.4f}")
+            print(f"  - Customer's value: {customer_value}  →  Goes {'LEFT (<=)' if customer_value <= thresh else 'RIGHT (>)'}")
+            print("-" * 40)
+        else:
+            # Leaf node
+            class_dist = tree.value[node_id][0]
+            total = class_dist.sum()
+            churn_prob = class_dist[1] / total if total > 0 else 0
+            print(f"Node {node_id} (Leaf — Final Destination):")
+            print(f"  - Class distribution  →  No Churn: {int(class_dist[0])}, Churn: {int(class_dist[1])}")
+            print(f"  - Churn probability at this leaf: {churn_prob:.1%}")
+            print("=" * 40)
 
 
 import pandas as pd
