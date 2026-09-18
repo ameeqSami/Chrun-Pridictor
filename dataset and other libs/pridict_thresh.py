@@ -4,9 +4,11 @@ class pridict_thresh(BaseEstimator, ClassifierMixin):
     def __init__(self, model, thresh=0.5):
         self.thresh = thresh
         self.model = model
+        self._estimator_type = "classifier"
 
     def fit(self, X, y, **kwargs):
         self.model.fit(X, y, **kwargs)
+        self.classes_ = self.model.classes_
         self.is_fitted_ = True  # lets sklearn's check_is_fitted detect fitted state
         return self
 
