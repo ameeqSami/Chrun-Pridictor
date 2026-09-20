@@ -76,6 +76,10 @@ class pridict_thresh(BaseEstimator, ClassifierMixin):
         -------
         self
         """
+        # Validate decision threshold
+        if not (0.0 <= self.thresh <= 1.0):
+            raise ValueError(f"thresh must be in [0.0, 1.0], got {self.thresh}")
+
         # Delegate training to the wrapped classifier
         self.model.fit(X, y, **kwargs)
 
@@ -124,6 +128,10 @@ class pridict_thresh(BaseEstimator, ClassifierMixin):
         ndarray of shape (n_samples,)
             Binary predictions: 1 if P(churn) > ``self.thresh`` else 0.
         """
+        # Validate decision threshold
+        if not (0.0 <= self.thresh <= 1.0):
+            raise ValueError(f"thresh must be in [0.0, 1.0], got {self.thresh}")
+
         # Get churn probability from the positive-class column (index 1)
         y_prob = self.model.predict_proba(X)[:, 1]
 
