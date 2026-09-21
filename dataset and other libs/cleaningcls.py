@@ -68,13 +68,23 @@ class clean_cls(BaseEstimator, TransformerMixin):
         if 'customerID' in X.columns:
             X = X.drop(columns=['customerID'], errors='ignore')
 
-        # --- Fix TotalCharges: blank strings become NaN, then fill with 0 ---
+        # --- Fix TotalCharges: blank strings become NaN, then fill with 0 as float ---
         if 'TotalCharges' in X.columns:
-            X['TotalCharges'] = pd.to_numeric(X['TotalCharges'], errors='coerce').fillna(0)
+            X['TotalCharges'] = pd.to_numeric(X['TotalCharges'], errors='coerce').fillna(0).astype(float)
 
-        # --- Binary-encode all Yes/No columns to 1/0 ---
-        for col in X.columns:
-            if set(X[col].dropna().unique()).issubset({'Yes', 'No'}):
+        # --- Binary-encode known binary Yes/No columns to 1/0 ---
+        bin_cols = getattr(self, 'binary_columns', None)
+        if bin_cols is None:
+            if hasattr(self, 'X') and self.X is not None:
+                bin_cols = [
+                    c for c in self.X.columns
+                    if set(self.X[c].dropna().unique()).issubset({'Yes', 'No'})
+                ]
+            else:
+                bin_cols = ['Partner', 'Dependents', 'PhoneService', 'PaperlessBilling']
+
+        for col in bin_cols:
+            if col in X.columns:
                 X[col] = X[col].map({'Yes': 1, 'No': 0})
 
         # --- Binary-encode gender (Male=1, Female=0) ---
@@ -83,6 +93,36 @@ class clean_cls(BaseEstimator, TransformerMixin):
 
         # --- One-hot encode multi-category columns (only those from fit) ---
         if self.dummy_columns:
+            cats = getattr(self, 'categories_', None)
+            if cats is None:
+                if hasattr(self, 'X') and self.X is not None:
+                    cats = {
+                        col: sorted(self.X[col].dropna().unique().tolist())
+                        for col in self.dummy_columns
+                        if col in self.X.columns
+                    }
+                else:
+                    cats = {
+                        'MultipleLines': ['No', 'No phone service', 'Yes'],
+                        'InternetService': ['DSL', 'Fiber optic', 'No'],
+                        'OnlineSecurity': ['No', 'No internet service', 'Yes'],
+                        'OnlineBackup': ['No', 'No internet service', 'Yes'],
+                        'DeviceProtection': ['No', 'No internet service', 'Yes'],
+                        'TechSupport': ['No', 'No internet service', 'Yes'],
+                        'StreamingTV': ['No', 'No internet service', 'Yes'],
+                        'StreamingMovies': ['No', 'No internet service', 'Yes'],
+                        'Contract': ['Month-to-month', 'One year', 'Two year'],
+                        'PaymentMethod': [
+                            'Bank transfer (automatic)',
+                            'Credit card (automatic)',
+                            'Electronic check',
+                            'Mailed check'
+                        ]
+                    }
+            for col in self.dummy_columns:
+                if col in X.columns and col in cats:
+                    X[col] = pd.Categorical(X[col], categories=cats[col])
+
             X = pd.get_dummies(X, columns=self.dummy_columns, drop_first=True, dtype=int)
 
         return X
@@ -116,14 +156,22 @@ class clean_cls(BaseEstimator, TransformerMixin):
         if 'TotalCharges' in self.X.columns:
             self.X['TotalCharges'] = pd.to_numeric(
                 self.X['TotalCharges'], errors='coerce'
-            ).fillna(0)
+            ).fillna(0).astype(float)
+
+        # Identify binary columns that map Yes/No -> 1/0
+        self.binary_columns = [
+            col for col in self.X.columns
+            if set(self.X[col].dropna().unique()).issubset({'Yes', 'No'})
+        ]
 
         # Identify columns that need one-hot encoding:
         # object dtype with more than 2 unique values (binary cols handled separately)
         self.dummy_columns = []
+        self.categories_ = {}
         for col in self.X.columns:
             if self.X[col].nunique() > 2 and self.X[col].dtype == 'object':
                 self.dummy_columns.append(col)
+                self.categories_[col] = sorted(self.X[col].dropna().unique().tolist())
 
         # Apply the full cleaning pipeline once to capture the column layout
         cleaned_X = self._clean(self.X)
